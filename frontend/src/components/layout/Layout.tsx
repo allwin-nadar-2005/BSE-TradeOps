@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navbar } from './Navbar';
+import { Chatbot } from '../chat/Chatbot';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -7,7 +8,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   return (
-    <div className="min-h-screen bg-ink-900 text-paper-100 font-sans flex flex-col selection:bg-brass-500/30 selection:text-paper-100">
+    <div className="min-h-screen bg-ink-900 text-paper-100 font-sans flex flex-col selection:bg-brass-500/30 selection:text-paper-100 relative">
       <Navbar />
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
@@ -27,6 +28,9 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </footer>
+
+      {/* Additive TradeOps Copilot AI Floating Assistant */}
+      <Chatbot />
     </div>
   );
 }
