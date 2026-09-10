@@ -39,11 +39,16 @@ app.use('/api', pullRouter);
 // TradeOps Copilot AI Chat route
 app.use('/api', chatRouter);
 
-const PORT = Number(process.env.PORT ?? 4000);
-app.listen(PORT, () => {
-  console.log(`BSE dashboard backend listening on http://localhost:${PORT}`);
-  console.log(`  Root status:    GET  http://localhost:${PORT}/`);
-  console.log(`  Mock exchange:  GET  http://localhost:${PORT}/getTrades`);
-  console.log(`  Trigger a pull: POST http://localhost:${PORT}/api/pull/start`);
-  console.log(`  Copilot AI:     POST http://localhost:${PORT}/api/chat`);
-});
+export { app };
+export default app;
+
+if (!process.env.VERCEL) {
+  const PORT = Number(process.env.PORT ?? 4000);
+  app.listen(PORT, () => {
+    console.log(`BSE dashboard backend listening on http://localhost:${PORT}`);
+    console.log(`  Root status:    GET  http://localhost:${PORT}/`);
+    console.log(`  Mock exchange:  GET  http://localhost:${PORT}/getTrades`);
+    console.log(`  Trigger a pull: POST http://localhost:${PORT}/api/pull/start`);
+    console.log(`  Copilot AI:     POST http://localhost:${PORT}/api/chat`);
+  });
+}

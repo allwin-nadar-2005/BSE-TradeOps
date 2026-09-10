@@ -6,10 +6,12 @@ interface SuggestedPromptsProps {
 
 export function SuggestedPrompts({ onSelect }: SuggestedPromptsProps) {
   const prompts = [
-    'What is happening right now?',
-    'Show me the latest ingestion status.',
+    'What is the total turnover & highest trade?',
+    'Which institutional clients have the highest volume?',
+    'Show me live ingestion & pipeline progress.',
     'Which symbols are most active?',
-    'Explain the 30-second connection problem.',
+    'Explain the <30s connection ceiling.',
+    'What page am I on and what does it show?',
   ];
 
   return (

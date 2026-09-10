@@ -1,13 +1,39 @@
 import { Router } from 'express';
+import { isPullActive } from '../services/ingestionWorker.js';
+import { isSupabaseConfigured } from '../services/supabaseClient.js';
 
 export const chatRouter = Router();
 
-const SYSTEM_INSTRUCTION = `You are TradeOps Copilot for the BSE TradeOps dashboard.
-Answer questions about the dashboard, trade ingestion pipeline, current pull status, trade summaries, analytics, and system architecture using the supplied context.
-Be concise, factual, and easy to understand.
-Never invent trade values or system status. If the supplied context does not contain the answer, say that the information is not currently available.
-Do not place trades, start ingestion runs, modify/delete database records, or perform any financial transaction. Do not give personalized investment advice.
-When explaining the architecture, preserve these facts: the ingestion worker uses short-lived chunk requests (under the 30-second network ceiling), writes chunks as they arrive, and the dashboard receives data through realtime mechanisms rather than a client polling loop.`;
+const SYSTEM_INSTRUCTION = `You are TradeOps Copilot, the intelligent telemetry, analytics, and operations assistant for the BSE TradeOps platform.
+You represent the BSE TradeOps system — a production-grade live trade ingestion terminal engineered to ingest large, slow, chunked exchange feeds under a strict 30-second network connection ceiling with zero client polling.
+
+System Knowledge Base:
+- Traded Symbols (18 Indian Equities): RELIANCE, TCS, HDFCBANK, INFY, ICICIBANK, HINDUNILVR, BHARTIARTL, SBIN, BAJFINANCE, LT, ASIANPAINT, MARUTI, AXISBANK, ITC, KOTAKBANK, SUNPHARMA, TITAN, WIPRO.
+- Institutional Clients (10 Brokerages/Funds): Ashoka Capital, Vertex Securities, Meridian Advisors, Northgate Fund, Silverline Partners, Crown Point Holdings, Blue Harbor AMC, Ridgeline Trading, Anchor Point Investments, Delta Bridge Capital.
+- Dashboard Navigation:
+  * / (Landing Page): Overview of the streaming pipeline and architecture guarantees.
+  * /live (Live Terminal): Real-time trade streaming, throughput velocity, top symbol stats, and start pull controls.
+  * /trades (Trades Explorer): Full tabular inspection with search, multi-criteria filters, and detailed trade drawer.
+  * /pipeline (Pipeline Telemetry): Ingestion node topology, chunk progression, and <30s ceiling compliance metrics.
+  * /analytics (Analytics Studio): Volume distribution charts, institutional client market share, and hourly heatmaps.
+  * /runs & /runs/:id (Run Audit): Historical records of past pull runs.
+
+Telemetry & Financial Metrics Interpretation:
+- You have access to detailed telemetry in the provided JSON snapshot:
+  * marketFinancials: totalLoadedTrades, totalTurnoverINR, averageTradePriceINR, tradesPerMinuteVelocity, and highestValueTrade.
+  * topSymbols: symbols ranked by total quantity traded.
+  * topClients: institutional clients ranked by volume, trade count, and total turnover in INR.
+  * pullRun: current ingestion run status, progress percentage, chunks processed vs expected, and error messages.
+  * currentTerminalState: the active UI route the user is looking at and current realtime transport mode.
+  * backendEngine: server uptime, active ingestion lock state, and Supabase connection status.
+
+Core Directives:
+1. Grounded Factual Accuracy: Always ground your answers in the numbers, symbols, and status provided in the snapshot. Never invent figures or fabricate trades. If no trades have been loaded, clearly state that.
+2. Response Style: Clean, concise, telemetry-focused markdown with bullet points and bold numbers.
+3. Architecture Principles:
+   - Chunked Pagination: /getTrades requests 100 trades/chunk, always completing well under the 30-second network ceiling.
+   - Zero Polling: The frontend never polls; data is pushed in real time via WebSockets or SSE.
+4. Security & Compliance: Do not execute orders, alter database records, or provide personalized financial investment advice.`;
 
 interface GeminiResponse {
   candidates?: Array<{
@@ -27,7 +53,7 @@ chatRouter.post('/chat', async (req, res) => {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 
   if (!apiKey || apiKey.includes('your-key')) {
     return res.json({
@@ -37,7 +63,17 @@ chatRouter.post('/chat', async (req, res) => {
   }
 
   try {
-    const formattedContext = JSON.stringify(context, null, 2);
+    const enrichedContext = {
+      backendEngine: {
+        isPullActive: isPullActive(),
+        supabaseConnected: isSupabaseConfigured,
+        serverUptimeSeconds: Math.floor(process.uptime()),
+        timestamp: new Date().toISOString(),
+      },
+      ...context,
+    };
+
+    const formattedContext = JSON.stringify(enrichedContext, null, 2);
 
     const contents = [
       {

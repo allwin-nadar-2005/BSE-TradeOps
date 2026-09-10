@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   BarChart2,
@@ -9,17 +9,28 @@ import {
   Terminal,
   Zap,
   Globe,
+  KeyRound,
+  LogOut,
+  User,
 } from 'lucide-react';
 import { usePullStatus } from '../../hooks/usePullStatus';
 import { useTradesRealtime } from '../../hooks/useTradesRealtime';
+import { useAuth } from '../../context/AuthContext';
 import { startPull } from '../../lib/api';
 import { useState } from 'react';
 
 export function Navbar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { pullRun } = usePullStatus();
   const { trades } = useTradesRealtime();
+  const { user, isAuthenticated, logout } = useAuth();
   const [starting, setStarting] = useState(false);
+
+  function handleLogout() {
+    logout();
+    navigate('/auth', { replace: true });
+  }
 
   const isPulling = pullRun?.status === 'running';
 
@@ -42,6 +53,7 @@ export function Navbar() {
     { label: 'Pull Runs', path: '/runs', icon: History },
     { label: 'Pipeline Health', path: '/pipeline', icon: Cpu },
     { label: 'Trade Explorer', path: '/trades', icon: Search },
+    { label: 'Desk Auth', path: '/auth', icon: KeyRound },
   ];
 
   return (
@@ -120,6 +132,37 @@ export function Navbar() {
                 {isPulling ? `${pullRun?.ingested_count ?? 0} Ingesting...` : 'Pipeline Idle'}
               </span>
             </div>
+
+            {/* Operator Auth State Chip / Sign In CTA */}
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-ink-800 border border-brass-500/30 text-xs font-mono">
+                <div className="w-6 h-6 rounded-full bg-brass-500/20 text-brass-400 font-bold flex items-center justify-center text-[10px] border border-brass-500/40">
+                  {user.avatarInitials}
+                </div>
+                <div className="hidden xl:flex flex-col text-left leading-tight">
+                  <span className="text-paper-100 font-bold truncate max-w-[110px]">{user.name}</span>
+                  <span className="text-[9px] text-teal-400 truncate max-w-[110px]">{user.clientFirm}</span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  id="navbar-logout-btn"
+                  title="Disconnect Operator Session"
+                  className="p-1 rounded hover:bg-ink-700 text-paper-400 hover:text-clay-400 transition-colors ml-0.5"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/auth"
+                id="navbar-signin-link"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-mono font-bold text-brass-400 hover:text-paper-100 bg-brass-500/10 hover:bg-brass-500/20 border border-brass-500/30 transition-all shadow-sm active:scale-95"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Operator Sign In</span>
+                <span className="sm:hidden">Auth</span>
+              </Link>
+            )}
 
             {/* Start Pull CTA */}
             <button
