@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { Trade } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:4000');
 const INITIAL_LOAD_LIMIT = 500;
 
 export function useTradesRealtime() {
@@ -31,27 +31,48 @@ export function useTradesRealtime() {
       }, 1600);
     }
 
+    async function loadInitialLocal() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/trades?limit=${INITIAL_LOAD_LIMIT}`);
+        if (res.ok) {
+          const data = (await res.json()) as Trade[];
+          if (!cancelled) {
+            data.forEach((r) => seenIds.current.add(r.id || r.trade_id));
+            setTrades(data);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load trades from local API:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     const client = supabase;
     if (client) {
-      // 1. Supabase Mode
+      // 1. Supabase Mode with Local Backend Fallback
       async function loadInitialSupabase() {
-        const { data, error } = await client!
-          .from('trades')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(INITIAL_LOAD_LIMIT);
+        try {
+          const { data, error } = await client!
+            .from('trades')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(INITIAL_LOAD_LIMIT);
 
-        if (cancelled) return;
-        if (error) {
-          console.error('Failed to load initial trades from Supabase:', error.message);
+          if (cancelled) return;
+          if (error || !data || data.length === 0) {
+            if (error) console.error('Failed to load initial trades from Supabase:', error.message);
+            await loadInitialLocal();
+            return;
+          }
+
+          const rows = (data ?? []) as Trade[];
+          rows.forEach((r) => seenIds.current.add(r.id || r.trade_id));
+          setTrades(rows);
           setLoading(false);
-          return;
+        } catch {
+          await loadInitialLocal();
         }
-
-        const rows = (data ?? []) as Trade[];
-        rows.forEach((r) => seenIds.current.add(r.id || r.trade_id));
-        setTrades(rows);
-        setLoading(false);
       }
 
       loadInitialSupabase();
@@ -69,29 +90,26 @@ export function useTradesRealtime() {
         )
         .subscribe();
 
+      // Periodic fetch to ensure seamless sync with backend
+      const interval = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/trades?limit=100`);
+          if (res.ok) {
+            const data = (await res.json()) as Trade[];
+            data.reverse().forEach((r) => handleIncomingTrade(r));
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 2000);
+
       return () => {
         cancelled = true;
+        clearInterval(interval);
         client.removeChannel(channel);
       };
     } else {
       // 2. Local REST + SSE Fallback Mode
-      async function loadInitialLocal() {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/trades?limit=${INITIAL_LOAD_LIMIT}`);
-          if (res.ok) {
-            const data = (await res.json()) as Trade[];
-            if (!cancelled) {
-              data.forEach((r) => seenIds.current.add(r.id || r.trade_id));
-              setTrades(data);
-            }
-          }
-        } catch (err) {
-          console.error('Failed to load trades from local API:', err);
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      }
-
       loadInitialLocal();
 
       // SSE connection

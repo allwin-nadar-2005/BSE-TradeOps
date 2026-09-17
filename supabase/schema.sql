@@ -9,6 +9,7 @@ create table if not exists public.pull_runs (
   status          text not null default 'idle' check (status in ('idle', 'running', 'completed', 'failed')),
   total_trades    integer,               -- expected total, known once the mock API reports it
   ingested_count  integer not null default 0,
+  current_offset  integer not null default 0,
   chunk_size      integer,
   started_at      timestamptz not null default now(),
   completed_at    timestamptz,

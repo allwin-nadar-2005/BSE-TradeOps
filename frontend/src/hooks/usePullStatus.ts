@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { PullRun } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:4000');
 
 export function usePullStatus() {
   const [pullRun, setPullRun] = useState<PullRun | null>(null);
@@ -12,23 +12,42 @@ export function usePullStatus() {
     let cancelled = false;
     const client = supabase;
 
-    if (client) {
-      // 1. Supabase Realtime Mode
-      async function loadLatestSupabase() {
-        const { data, error } = await client!
-          .from('pull_runs')
-          .select('*')
-          .order('started_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (cancelled) return;
-        if (error) {
-          console.error('Failed to load pull status:', error.message);
-        } else {
-          setPullRun((data as PullRun) ?? null);
+    async function loadLatestLocal() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/pull/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setPullRun(data ?? null);
         }
-        setLoading(false);
+      } catch (err) {
+        console.error('Failed to fetch pull status from local API:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    if (client) {
+      // 1. Supabase Realtime Mode with Local Fallback
+      async function loadLatestSupabase() {
+        try {
+          const { data, error } = await client!
+            .from('pull_runs')
+            .select('*')
+            .order('started_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (cancelled) return;
+          if (error || !data) {
+            if (error) console.error('Failed to load pull status from Supabase:', error.message);
+            await loadLatestLocal();
+          } else {
+            setPullRun((data as PullRun) ?? null);
+          }
+          setLoading(false);
+        } catch {
+          await loadLatestLocal();
+        }
       }
 
       loadLatestSupabase();
@@ -52,26 +71,15 @@ export function usePullStatus() {
         )
         .subscribe();
 
+      const interval = setInterval(loadLatestLocal, 1500);
+
       return () => {
         cancelled = true;
+        clearInterval(interval);
         client.removeChannel(channel);
       };
     } else {
       // 2. Local REST + SSE Fallback Mode
-      async function loadLatestLocal() {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/pull/status`);
-          if (res.ok) {
-            const data = await res.json();
-            if (!cancelled) setPullRun(data ?? null);
-          }
-        } catch (err) {
-          console.error('Failed to fetch pull status from local API:', err);
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      }
-
       loadLatestLocal();
 
       let eventSource: EventSource | null = null;

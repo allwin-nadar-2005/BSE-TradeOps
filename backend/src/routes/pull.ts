@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   startPull,
+  stepPull,
   isPullActive,
   getLatestPullRunRow,
   getIngestedTrades,
@@ -20,6 +21,20 @@ pullRouter.post('/pull/start', async (_req, res) => {
     res.status(202).json(run);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to start pull' });
+  }
+});
+
+// POST /api/pull/step — processes a single chunk for the active pull run
+pullRouter.post('/pull/step', async (req, res) => {
+  try {
+    const { pullRunId } = req.body;
+    if (!pullRunId) {
+      return res.status(400).json({ error: 'pullRunId is required' });
+    }
+    await stepPull(pullRunId);
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to process step' });
   }
 });
 

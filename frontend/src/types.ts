@@ -5,6 +5,7 @@ export interface PullRun {
   status: PullStatus;
   total_trades: number | null;
   ingested_count: number;
+  current_offset: number;
   chunk_size: number | null;
   started_at: string;
   completed_at: string | null;
